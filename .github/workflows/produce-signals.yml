@@ -1,0 +1,39 @@
+name: produce-signals
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: produce-signals
+  cancel-in-progress: false
+
+jobs:
+  produce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: Asia/Kolkata
+      SIGNAL_STATE_ROOT: ${{ github.workspace }}/state
+      SIGNAL_ARTIFACT_ROOT: ${{ github.workspace }}/artifacts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install acquisition dependencies
+        run: pip install selenium webdriver-manager pandas numpy duckdb
+      - name: Acquire weekly state
+        run: python3 run.py
+      - name: Acquire daily state
+        run: python3 daily.py
+      - name: Acquire breadth and sector state
+        run: python3 market.py
+      - name: Build versioned bundle
+        run: python3 signals_bundle.py
+      - name: Upload immutable bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: signals-bundle-${{ github.sha }}
+          path: artifacts/signals-bundle.v1.json
+          if-no-files-found: error
+          retention-days: 30

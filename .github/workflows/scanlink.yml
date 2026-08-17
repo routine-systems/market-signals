@@ -1,0 +1,31 @@
+name: scanlink
+
+# Fast scanlink-only refresh — re-extracts the rotating Chartink scanlinks (no backtest
+# download, no rebuild, no redeploy) and writes them to the SCANLINKS KV namespace. The
+# deployed pages read them via /api/scanlink and patch their in-scan ticker links, so links
+# keep working between the daily full scrapes. The ⚡ Links button dispatches this (~1 min).
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: scanlink
+  cancel-in-progress: true
+
+jobs:
+  scanlink:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      TZ: Asia/Kolkata
+      CF_ACCOUNT: 62231b040ed00c96cdcf3a4541eab958
+      CF_KV_NS: c85ac5582e0b49fd927bddbeaa487805
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python deps
+        run: pip install selenium webdriver-manager
+      - name: Re-extract scanlinks and write to KV
+        run: python3 scanlink_kv.py
