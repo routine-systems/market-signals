@@ -24,9 +24,10 @@ LEVELS = [("sector", "Sector"), ("industry", "Industry"), ("basic", "Basic Indus
 ROTATION_WINDOW = 13                                    # weeks used to judge rotation
 
 
-def load_sector_map():
+def load_sector_map(source=None):
     """Read symbol classifications from the configured market-data artifact."""
-    src = next((candidate for candidate in (DATA_CSV, SECTOR_MAP) if candidate.exists()), None)
+    candidates = (Path(source),) if source is not None else (DATA_CSV, SECTOR_MAP)
+    src = next((candidate for candidate in candidates if candidate.exists()), None)
     if src is None:
         return {}
     raw = src.read_text(encoding="utf-8-sig", errors="replace")

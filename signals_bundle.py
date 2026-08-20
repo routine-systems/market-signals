@@ -27,6 +27,56 @@ def _latest(values) -> str | None:
     return max(items) if items else None
 
 
+def _membership(payload: dict) -> dict[str, list[str]]:
+    return {
+        item["week"]: sorted(
+            {ticker["symbol"] for ticker in item.get("tickers", [])}
+        )
+        for item in payload.get("weeks", [])
+    }
+
+
+def _cross_payload(source: dict, *, label: str, name: str) -> dict:
+    return {
+        "label": label,
+        "name": name,
+        "url": source.get("source_url"),
+        "weeks": _membership(source),
+    }
+
+
+def _rotation_payload(
+    payload: dict,
+    sector_store: dict,
+    classifications: dict[str, dict[str, str]],
+) -> dict | None:
+    if not sector_store.get("weeks") or not classifications:
+        return None
+    symbols = {
+        ticker["symbol"]
+        for item in payload.get("weeks", [])
+        for ticker in item.get("tickers", [])
+    }
+    return {
+        "window": sectors_lib.ROTATION_WINDOW,
+        "updated_at": sector_store.get("updated_at"),
+        "levels": [level for level, _ in sectors_lib.LEVELS],
+        "levelNames": dict(sectors_lib.LEVELS),
+        "status": sectors_lib.compute_status(
+            sector_store, sectors_lib.ROTATION_WINDOW
+        ),
+        "of": {
+            symbol: [
+                classifications[symbol]["sector"],
+                classifications[symbol]["industry"],
+                classifications[symbol]["basic"],
+            ]
+            for symbol in sorted(symbols)
+            if symbol in classifications
+        },
+    }
+
+
 def _ema(values: list[float], period: int) -> list[float]:
     alpha = 2.0 / (period + 1)
     current = None
@@ -82,6 +132,7 @@ def _commit() -> str:
 def build_bundle(
     state_root: Path = SIGNAL_STATE_ROOT,
     recommendation_path: Path | None = None,
+    classification_path: Path = CLASSIFICATION_PATH,
 ) -> dict:
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
         "+00:00", "Z"
@@ -90,6 +141,7 @@ def build_bundle(
     daily = _read(state_root / "history_daily.json")
     breadth = _read(state_root / "market_counts.json")
     sectors = _read(state_root / "sector_weekly.json")
+    classifications = sectors_lib.load_sector_map(classification_path)
     weekly_dates = [item.get("week") for item in weekly.get("weeks", [])]
     daily_dates = [item.get("week") for item in daily.get("weeks", [])]
     breadth_dates = [day for counts in breadth.get("counts", {}).values() for day in counts]
@@ -103,20 +155,14 @@ def build_bundle(
     )
     sectors = dict(sectors)
     sectors["cap_weeks"] = 40
-    sectors["parents"] = sectors_lib.group_parents(sectors_lib.load_sector_map())
+    sectors["parents"] = sectors_lib.group_parents(classifications)
 
-    if "cross" not in daily:
-        daily["cross"] = {
-            "label": "W",
-            "name": "weekly",
-            "url": weekly.get("source_url"),
-            "weeks": {
-                item["week"]: sorted(
-                    {ticker["symbol"] for ticker in item.get("tickers", [])}
-                )
-                for item in weekly.get("weeks", [])
-            },
-        }
+    weekly["cross"] = _cross_payload(daily, label="D", name="daily")
+    daily["cross"] = _cross_payload(weekly, label="W", name="weekly")
+    for payload in (weekly, daily):
+        rotation = _rotation_payload(payload, sectors, classifications)
+        if rotation:
+            payload["rotation"] = rotation
     recommendation_page = _recommendations(recommendation_path, generated_at)
     cutoff = _latest(weekly_dates + daily_dates + breadth_dates + list(sector_dates))
     return {
@@ -156,9 +202,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-root", type=Path, default=SIGNAL_STATE_ROOT)
     parser.add_argument("--recommendations", type=Path)
+    parser.add_argument("--classification", type=Path, default=CLASSIFICATION_PATH)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
-    bundle = build_bundle(args.state_root, args.recommendations)
+    bundle = build_bundle(args.state_root, args.recommendations, args.classification)
     checksum = write_bundle(bundle, args.output)
     print(json.dumps({"path": str(args.output), "sha256": checksum}, indent=2))
     return 0
