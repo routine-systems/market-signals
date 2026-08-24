@@ -16,8 +16,8 @@ jobs:
       SIGNAL_STATE_ROOT: ${{ github.workspace }}/state
       SIGNAL_ARTIFACT_ROOT: ${{ github.workspace }}/artifacts
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install acquisition dependencies
@@ -31,7 +31,7 @@ jobs:
       - name: Build versioned bundle
         run: python3 signals_bundle.py
       - name: Upload immutable bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: signals-bundle-${{ github.sha }}
           path: artifacts/signals-bundle.v1.json
