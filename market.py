@@ -24,7 +24,7 @@ from pathlib import Path
 from selenium.webdriver.support.ui import WebDriverWait
 
 from scrape import build_driver, download_backtest_csv, polite_pause
-from chartink_payloads import iso_date as _iso
+from chartink_payloads import iso_date as _iso, period_date
 from sectors_lib import LEVELS, SECTOR_STORE, load_sector_map
 from signal_paths import SIGNAL_STATE_ROOT
 
@@ -121,7 +121,7 @@ def membership_from_csv(path: Path):
     per = defaultdict(set)
     for row in reader:
         sym = (row.get(scol) or "").strip().upper()
-        iso = _iso(row.get(dcol) or "")
+        iso = period_date(row.get(dcol) or "", "weekly")
         if sym and iso:
             per[iso].add(sym)
     return per

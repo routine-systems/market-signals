@@ -6,7 +6,7 @@ import csv
 import json
 import os
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -21,7 +21,16 @@ def iso_date(value: str) -> str:
     return source
 
 
-def parse_backtest(csv_path: Path) -> list[dict]:
+def period_date(value: str, timeframe: str = "daily") -> str:
+    """Keep sessions intact; key weekly candles by Monday, including holiday weeks."""
+    period = iso_date(value)
+    if period and timeframe.lower() == "weekly":
+        session = datetime.strptime(period, "%Y-%m-%d").date()
+        return (session - timedelta(days=session.weekday())).isoformat()
+    return period
+
+
+def parse_backtest(csv_path: Path, timeframe: str = "daily") -> list[dict]:
     reader = csv.DictReader(
         csv_path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
     )
@@ -39,7 +48,7 @@ def parse_backtest(csv_path: Path) -> list[dict]:
     by_period: dict[str, list[dict]] = defaultdict(list)
     for row in reader:
         symbol = (row.get(symbol_column) or "").strip()
-        period = iso_date(row.get(date_column) or "")
+        period = period_date(row.get(date_column) or "", timeframe)
         if symbol and period:
             by_period[period].append(
                 {
@@ -59,7 +68,7 @@ def build_history(
     scanlink: str | None = None,
     timeframe: str | None = None,
 ) -> dict:
-    periods = parse_backtest(csv_path)
+    periods = parse_backtest(csv_path, timeframe or "weekly")
     if not periods:
         raise RuntimeError(f"No rows parsed from {csv_path}")
     return {
@@ -71,10 +80,10 @@ def build_history(
     }
 
 
-def parse_membership(csv_path: Path) -> dict[str, list[str]]:
+def parse_membership(csv_path: Path, timeframe: str = "daily") -> dict[str, list[str]]:
     return {
         item["week"]: sorted({ticker["symbol"] for ticker in item["tickers"]})
-        for item in parse_backtest(csv_path)
+        for item in parse_backtest(csv_path, timeframe)
     }
 
 
@@ -82,7 +91,7 @@ def attach_filter(history: dict, filter_csv: Path, url: str) -> dict:
     history["filter"] = {
         "screener": url.rstrip("/").split("/")[-1],
         "url": url,
-        "weeks": parse_membership(filter_csv),
+        "weeks": parse_membership(filter_csv, history.get("timeframe") or "weekly"),
     }
     return history
 
