@@ -122,6 +122,17 @@ def download_backtest_csv(driver, dest_dir: Path, timeout: int = 45, before=None
     try:
         dl_btns = WebDriverWait(driver, timeout).until(visible_downloads)
     except Exception as exc:
+        diagnostics = driver.execute_script("""
+            const buttons = [...document.querySelectorAll('button')];
+            return {button_count: buttons.length,
+              labels: buttons.map(b => ({label: (b.innerText || b.textContent || '').trim().slice(0,80),
+                aria: b.getAttribute('aria-label'), visible: !!b.getClientRects().length,
+                disabled: b.disabled})).filter(b => /backtest|download|csv/i.test(b.label + ' ' + b.aria)),
+              frames: document.querySelectorAll('iframe').length,
+              backtest_text: document.body.innerText.includes('Backtest History'),
+              loading: document.body.innerText.includes('Loading')};
+        """)
+        print('Backtest control diagnostics:', json.dumps(diagnostics), flush=True)
         raise RuntimeError("Backtest Download button not found") from exc
     dl = sorted(dl_btns, key=lambda b: b.location["y"])[-1]
     dl_y = dl.location["y"]
