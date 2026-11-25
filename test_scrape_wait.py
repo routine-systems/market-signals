@@ -12,9 +12,10 @@ def test_download_waits_for_visible_button(tmp_path):
     csv.is_displayed.return_value = True
     csv.location = {"y": 500}
     driver = Mock()
-    driver.find_elements.side_effect = [[], [button], [csv]]
+    driver.execute_script.side_effect = [[], [button], None, None]
+    driver.find_elements.return_value = [csv]
     with patch.object(scrape.time, "sleep"), pytest.raises(RuntimeError, match="download timed out"):
         scrape.download_backtest_csv(driver, tmp_path, timeout=1)
-    assert driver.find_elements.call_count >= 3
+    assert driver.execute_script.call_count >= 3
     button.click.assert_called_once()
     csv.click.assert_called_once()

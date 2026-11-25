@@ -113,11 +113,16 @@ def download_backtest_csv(driver, dest_dir: Path, timeout: int = 45, before=None
     if before is None:
         before = {p.name for p in dest_dir.glob("*.csv")}
     def visible_downloads(d):
-        buttons = d.find_elements(
-            By.XPATH,
-            "//button[normalize-space(.)='Download' or .//span[normalize-space(text())='Download']]",
-        )
-        return [button for button in buttons if button.is_displayed()]
+        # Chartink's button contains an SVG with many Vue comment nodes; select
+        # by its rendered label, then scroll it into view before Selenium checks it.
+        buttons = d.execute_script("""
+            return [...document.querySelectorAll('button')].filter(b =>
+                (b.innerText || b.textContent || '').trim() === 'Download' &&
+                !b.disabled && b.getClientRects().length);
+        """)
+        if buttons:
+            d.execute_script("arguments[0].scrollIntoView({block:'center'});", buttons[-1])
+        return buttons
 
     try:
         dl_btns = WebDriverWait(driver, timeout).until(visible_downloads)
