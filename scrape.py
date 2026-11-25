@@ -127,7 +127,7 @@ def download_backtest_csv(driver, dest_dir: Path, timeout: int = 45, before=None
             return {button_count: buttons.length,
               labels: buttons.map(b => ({label: (b.innerText || b.textContent || '').trim().slice(0,80),
                 aria: b.getAttribute('aria-label'), visible: !!b.getClientRects().length,
-                disabled: b.disabled})).filter(b => /backtest|download|csv/i.test(b.label + ' ' + b.aria)),
+                disabled: b.disabled, html: /download/i.test(b.innerText || b.textContent || '') ? b.outerHTML.slice(-2500) : undefined})).filter(b => /backtest|download|csv/i.test(b.label + ' ' + b.aria)),
               frames: document.querySelectorAll('iframe').length,
               backtest_text: document.body.innerText.includes('Backtest History'),
               loading: document.body.innerText.includes('Loading')};
