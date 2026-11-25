@@ -112,10 +112,17 @@ def download_backtest_csv(driver, dest_dir: Path, timeout: int = 45, before=None
     """
     if before is None:
         before = {p.name for p in dest_dir.glob("*.csv")}
-    dl_btns = [b for b in driver.find_elements(
-        By.XPATH, "//button[.//span[normalize-space(text())='Download']]") if b.is_displayed()]
-    if not dl_btns:
-        raise RuntimeError("Backtest Download button not found")
+    def visible_downloads(d):
+        buttons = d.find_elements(
+            By.XPATH,
+            "//button[normalize-space(.)='Download' or .//span[normalize-space(text())='Download']]",
+        )
+        return [button for button in buttons if button.is_displayed()]
+
+    try:
+        dl_btns = WebDriverWait(driver, timeout).until(visible_downloads)
+    except Exception as exc:
+        raise RuntimeError("Backtest Download button not found") from exc
     dl = sorted(dl_btns, key=lambda b: b.location["y"])[-1]
     dl_y = dl.location["y"]
     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", dl)
